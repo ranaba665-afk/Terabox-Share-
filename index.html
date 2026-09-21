@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File List - Terabox Videos</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#ffffff; --accent:#2563eb; --accent-dark:#1d4ed8;
+    --text:#1f2330; --muted:#6b7280; --border:#e5e7eb; --danger:#dc2626;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);padding:24px 16px 80px;}
+  .wrap{max-width:720px;margin:0 auto;}
+  h1{text-align:center;font-size:22px;margin-bottom:24px;letter-spacing:0.5px;}
+  .file-card{
+    background:var(--card);border:1px solid var(--border);border-radius:10px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.06);padding:20px;margin-bottom:16px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    cursor:pointer;transition:transform .12s ease, box-shadow .12s ease;
+    text-decoration:none;color:inherit;
+  }
+  .file-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.10);}
+  .file-name{font-weight:800;font-size:20px;letter-spacing:1px;}
+  .file-sub{font-size:12px;color:var(--muted);margin-top:4px;font-weight:400;}
+  .play-icon{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;}
+  .empty,.loading{text-align:center;color:var(--muted);padding:40px 0;font-size:14px;}
+  .admin-toggle{position:fixed;bottom:16px;right:16px;background:var(--text);color:#fff;border:none;border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,0.25);}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:50;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:#fff;border-radius:12px;padding:20px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;}
+  .modal h2{margin-top:0;font-size:18px;}
+  .modal label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px;}
+  .modal input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;}
+  .modal-buttons{display:flex;gap:8px;margin-top:18px;}
+  .btn{flex:1;padding:10px;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:600;}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:var(--accent-dark);}
+  .btn-secondary{background:#f1f2f4;color:var(--text);}
+  .admin-list{margin-top:18px;border-top:1px solid var(--border);padding-top:12px;}
+  .admin-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .admin-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px;}
+  .del-btn{background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;font-weight:600;}
+  .msg{font-size:12px;margin-top:8px;min-height:16px;}
+  .msg.error{color:var(--danger);}
+  .msg.success{color:#16a34a;}
+  .admin-header{display:flex;justify-content:space-between;align-items:center;}
+  .logout-link{font-size:12px;color:var(--accent);cursor:pointer;text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📁 File List</h1>
+  <div id="fileList"><div class="loading">লোড হচ্ছে...</div></div>
+</div>
+
+<button class="admin-toggle" onclick="openAdminLogin()" title="Admin">⚙️</button>
+
+<!-- Admin login modal -->
+<div class="modal-overlay" id="loginOverlay">
+  <div class="modal">
+    <h2>🔒 Admin Login</h2>
+    <label>Email</label>
+    <input type="email" id="adminEmail" placeholder="[email protected]">
+    <label>Password</label>
+    <input type="password" id="adminPassword" placeholder="পাসওয়ার্ড">
+    <div class="msg error" id="loginMsg"></div>
+    <div class="modal-buttons">
+      <button class="btn btn-secondary" onclick="closeModal('loginOverlay')">বাতিল</button>
+      <button class="btn btn-primary" onclick="doLogin()">লগইন</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin panel modal -->
+<div class="modal-overlay" id="adminOverlay">
+  <div class="modal">
+    <div class="admin-header">
+      <h2>⚙️ Admin Panel</h2>
+      <span class="logout-link" onclick="doLogout()">লগআউট</span>
+    </div>
+    <label>File Name (যেমন: FILE NO.5)</label>
+    <input type="text" id="newFileName" placeholder="FILE NO.5">
+    <label>Terabox Link</label>
+    <input type="text" id="newFileLink" placeholder="https://terabox.com/s/...">
+    <div class="msg" id="addMsg"></div>
+    <div class="modal-buttons">
+      <button class="btn btn-primary" onclick="addFile()">➕ যোগ করুন</button>
+      <button class="btn btn-secondary" onclick="closeModal('adminOverlay')">বন্ধ করুন</button>
+    </div>
+    <div class="admin-list" id="adminList"></div>
+  </div>
+</div>
+
+<!-- Firebase SDK (compat, no build step needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+<script>
+let auth, db, filesRef;
+let files = []; // {id, name, link}
+let isAdmin = false;
+
+// Fetch Firebase config from the Vercel serverless function (env vars, not in source)
+async function initFirebase(){
+  try{
+    const res = await fetch('/api/config');
+    if(!res.ok) throw new Error('config fetch failed');
+    const firebaseConfig = await res.json();
+
+    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    filesRef = db.collection('files');
+
+    filesRef.orderBy('addedAt', 'asc').onSnapshot(snapshot => {
+      files = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+      renderPublicList();
+      if(isAdmin) renderAdminList();
+    }, err => {
+      document.getElementById('fileList').innerHTML =
+        '<div class="empty">লোড করতে সমস্যা হয়েছে। Firestore রুলস চেক করুন।</div>';
+    });
+
+    auth.onAuthStateChanged(user => {
+      isAdmin = !!user;
+      if(isAdmin) renderAdminList();
+    });
+  }catch(e){
+    document.getElementById('fileList').innerHTML =
+      '<div class="empty">কনফিগ লোড করতে সমস্যা হয়েছে। /api/config ঠিকমতো ডিপ্লয় হয়েছে কিনা চেক করুন।</div>';
+  }
+}
+initFirebase();
+
+function renderPublicList(){
+  const container = document.getElementById('fileList');
+  if(!files.length){
+    container.innerHTML = '<div class="empty">এখনো কোনো ফাইল যোগ করা হয়নি।</div>';
+    return;
+  }
+  container.innerHTML = files.map(f => `
+    <a class="file-card" href="${escapeAttr(f.link)}" target="_blank" rel="noopener">
+      <div>
+        <div class="file-name">${escapeHtml(f.name)}</div>
+        <div class="file-sub">ক্লিক করে দেখুন</div>
+      </div>
+      <div class="play-icon">▶</div>
+    </a>
+  `).join('');
+}
+
+function renderAdminList(){
+  const container = document.getElementById('adminList');
+  if(!files.length){
+    container.innerHTML = '<div class="msg">কোনো ফাইল নেই।</div>';
+    return;
+  }
+  container.innerHTML = files.map(f => `
+    <div class="admin-row">
+      <span title="${escapeAttr(f.name)}">${escapeHtml(f.name)}</span>
+      <button class="del-btn" onclick="deleteFile('${f.id}')">মুছুন</button>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+function escapeAttr(str){
+  return String(str).replace(/"/g,'&quot;');
+}
+
+function openAdminLogin(){
+  if(isAdmin){
+    document.getElementById('adminOverlay').classList.add('open');
+    renderAdminList();
+    return;
+  }
+  document.getElementById('loginOverlay').classList.add('open');
+  document.getElementById('adminEmail').value = '';
+  document.getElementById('adminPassword').value = '';
+  document.getElementById('loginMsg').textContent = '';
+}
+
+async function doLogin(){
+  const email = document.getElementById('adminEmail').value.trim();
+  const pw = document.getElementById('adminPassword').value;
+  const msg = document.getElementById('loginMsg');
+  if(!email || !pw){
+    msg.textContent = 'ইমেইল ও পাসওয়ার্ড দিন।';
+    return;
+  }
+  try{
+    await auth.signInWithEmailAndPassword(email, pw);
+    closeModal('loginOverlay');
+    document.getElementById('adminOverlay').classList.add('open');
+  }catch(e){
+    msg.textContent = 'লগইন ব্যর্থ। ইমেইল/পাসওয়ার্ড চেক করুন।';
+  }
+}
+
+function doLogout(){
+  auth.signOut();
+  closeModal('adminOverlay');
+}
+
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+}
+
+async function addFile(){
+  const nameInput = document.getElementById('newFileName');
+  const linkInput = document.getElementById('newFileLink');
+  const msg = document.getElementById('addMsg');
+  const name = nameInput.value.trim();
+  const link = linkInput.value.trim();
+
+  if(!name || !link){
+    msg.className = 'msg error';
+    msg.textContent = 'নাম এবং লিংক দুটোই দিন।';
+    return;
+  }
+  if(!/^https?:\/\//i.test(link)){
+    msg.className = 'msg error';
+    msg.textContent = 'সঠিক লিংক দিন (http/https দিয়ে শুরু)।';
+    return;
+  }
+  try{
+    await filesRef.add({name, link, addedAt: Date.now()});
+    msg.className = 'msg success';
+    msg.textContent = 'যোগ হয়েছে!';
+    nameInput.value = '';
+    linkInput.value = '';
+  }catch(e){
+    msg.className = 'msg error';
+    msg.textContent = 'সেভ করতে সমস্যা হয়েছে (রুলস/লগইন চেক করুন)।';
+  }
+}
+
+async function deleteFile(id){
+  try{
+    await filesRef.doc(id).delete();
+  }catch(e){
+    alert('মুছতে সমস্যা হয়েছে।');
+  }
+}
+</script>
+</body>
+</html>
+
