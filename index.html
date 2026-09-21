@@ -25,6 +25,10 @@
   .file-sub{font-size:12px;color:var(--muted);margin-top:4px;font-weight:400;}
   .play-icon{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;}
   .empty,.loading{text-align:center;color:var(--muted);padding:40px 0;font-size:14px;}
+  .ad-slot{
+    display:flex;align-items:center;justify-content:center;
+    min-height:60px;margin-bottom:16px;overflow:hidden;
+  }
   .admin-toggle{position:fixed;bottom:16px;right:16px;background:var(--text);color:#fff;border:none;border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,0.25);}
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:50;}
   .modal-overlay.open{display:flex;}
@@ -134,21 +138,72 @@ async function initFirebase(){
 }
 initFirebase();
 
+// ===== ADSTERRA CONFIG — এখানে আপনার আসল key ও script src বসান =====
+const ADSTERRA_KEY = "969f5aa066f678d408acea5a91b04e5d";
+const ADSTERRA_SCRIPT_SRC = "https://www.highrevenueformat.com/969f5aa066f678d408acea5a91b04e5d/invoke.js";
+const ADSTERRA_WIDTH = 320;
+const ADSTERRA_HEIGHT = 50;
+const ADS_EVERY = 5; // কতটা ফাইল পরপর একটা ব্যানার
+// ======================================================================
+
 function renderPublicList(){
   const container = document.getElementById('fileList');
   if(!files.length){
     container.innerHTML = '<div class="empty">এখনো কোনো ফাইল যোগ করা হয়নি।</div>';
     return;
   }
-  container.innerHTML = files.map(f => `
-    <a class="file-card" href="${escapeAttr(f.link)}" target="_blank" rel="noopener">
-      <div>
-        <div class="file-name">${escapeHtml(f.name)}</div>
-        <div class="file-sub">ক্লিক করে দেখুন</div>
-      </div>
-      <div class="play-icon">▶</div>
-    </a>
-  `).join('');
+  let html = '';
+  const adSlotIds = [];
+  files.forEach((f, i) => {
+    html += `
+      <a class="file-card" href="${escapeAttr(f.link)}" target="_blank" rel="noopener">
+        <div>
+          <div class="file-name">${escapeHtml(f.name)}</div>
+          <div class="file-sub">ক্লিক করে দেখুন</div>
+        </div>
+        <div class="play-icon">▶</div>
+      </a>`;
+    // প্রতি ADS_EVERY-টা ফাইলের পর একটা ad slot, কিন্তু লিস্টের একদম শেষে হলে বসাবে না
+    const position = i + 1;
+    if(position % ADS_EVERY === 0 && position !== files.length){
+      const slotId = `ad-slot-${position}`;
+      adSlotIds.push(slotId);
+      html += `<div class="ad-slot" id="${slotId}"></div>`;
+    }
+  });
+  container.innerHTML = html;
+  adSlotIds.forEach(insertAdsterraBanner);
+}
+
+function insertAdsterraBanner(slotId){
+  const slot = document.getElementById(slotId);
+  if(!slot || ADSTERRA_KEY === "YOUR_ADSTERRA_KEY") return; // config না বসানো পর্যন্ত কিছু দেখাবে না
+
+  // Adsterra প্রতিটা ব্যানারের জন্য আলাদা window-scope atOptions চায়, তাই একটা isolated iframe বানাই
+  const iframe = document.createElement('iframe');
+  iframe.style.border = 'none';
+  iframe.style.overflow = 'hidden';
+  iframe.width = ADSTERRA_WIDTH;
+  iframe.height = ADSTERRA_HEIGHT;
+  slot.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
+    <html><body style="margin:0;padding:0;">
+    <script type="text/javascript">
+      atOptions = {
+        'key' : '${ADSTERRA_KEY}',
+        'format' : 'iframe',
+        'height' : ${ADSTERRA_HEIGHT},
+        'width' : ${ADSTERRA_WIDTH},
+        'params' : {}
+      };
+    <\/script>
+    <script type="text/javascript" src="${ADSTERRA_SCRIPT_SRC}"><\/script>
+    </body></html>
+  `);
+  doc.close();
 }
 
 function renderAdminList(){
@@ -249,6 +304,8 @@ async function deleteFile(id){
   }
 }
 </script>
+
+<!-- Adsterra Social Bar -->
+<script src="https://pl31440657.profitableratecpmnetwork.com/4a/e2/74/4ae274ed3f9ab2ab83954b7ee68df425.js"></script>
 </body>
 </html>
-
